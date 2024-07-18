@@ -1,0 +1,65 @@
+import pcapy
+from struct import unpack
+import socket
+import dpkt
+
+def main():
+    # List all available network interfaces
+    devices = pcapy.findalldevs()
+    print("Available devices:")
+    print(devices)
+    
+    # Choose the interface to sniff
+    dev = input("\nEnter the interface name you want to sniff: ")
+    
+    # Open the network interface in promiscuous mode with a larger buffer
+    cap = pcapy.open_live(dev, 65536, 1, 0)
+    
+    print(f"\nSniffing on interface {dev}...")
+
+    # Sniff packets
+    try:
+        packet_count = 0
+        while True:
+            header, packet = cap.next()
+            
+            # Parse Ethernet header
+            eth = dpkt.ethernet.Ethernet(packet)
+            
+            # Extract the source and destination MAC addresses
+            src_mac = ':'.join(f"{b:02x}" for b in eth.src)
+            dst_mac = ':'.join(f"{b:02x}" for b in eth.dst)
+            
+            # Display basic information about the packet
+            print(f"\n\nPacket #{packet_count + 1}")
+            print(f"Source MAC: {src_mac}")
+            print(f"Destination MAC: {dst_mac}")
+            print(f"Packet length: {len(packet)} bytes")
+            
+            # Check if the packet contains an IP layer
+            if isinstance(eth.data, dpkt.ip.IP):
+                ip = eth.data
+                src_ip = socket.inet_ntoa(ip.src)
+                dst_ip = socket.inet_ntoa(ip.dst)
+                
+                print(f"Source IP: {src_ip}")
+                print(f"Destination IP: {dst_ip}")
+                
+                # Check if the IP packet contains a TCP layer
+                if isinstance(ip.data, dpkt.tcp.TCP):
+                    tcp = ip.data
+                    print(f"Source Port: {tcp.sport}")
+                    print(f"Destination Port: {tcp.dport}")
+                    
+                    # Extract and display payload (first 32 bytes)
+                    print("Payload (first 32 bytes):")
+                    payload = tcp.data[:32]
+                    print(payload.hex())
+                
+            packet_count += 1
+    
+    except KeyboardInterrupt:
+        print("\n\nSniffing stopped.")
+
+if __name__ == "__main__":
+    main()
